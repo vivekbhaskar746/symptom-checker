@@ -1,0 +1,85 @@
+name: client vm cicd
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Get code
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    # 2. Build check (fail fast)
+    
+    - name: Build Validation
+      run: |
+        echo "Running Frontend build validation..."
+        cd frontend
+        npm ci && npm run build
+
+        echo "Running Backend build validation..."
+        cd ../backend
+        ./mvnw clean install -DskipTests
+
+        echo "Build OK ✅"
+
+
+    # 3. Build Docker images
+    - name: Build Images
+      run: |
+        docker build -t symptom-checker-frontend ./frontend
+        docker build -t symptom-checker-backend ./backend
+
+    # 4. Convert images into TAR
+    - name: Export to TAR
+      run: |
+        docker save -o symptom-checker-frontend.tar symptom-checker-frontend
+        docker save -o symptom-checker-backend.tar symptom-checker-backend
+
+    #  5. FIRST SSH → uninstall + delete OLD TAR
+    - name: Cleanup Old Deployment
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.VM_HOST }}
+        username: ${{ secrets.VM_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          cd /home/${{ secrets.VM_USER }}/SYMPTOM-CHECKER
+
+          echo "Stopping old containers..."
+          chmod +x uninstall.sh
+          ./uninstall.sh || true
+
+          echo "Deleting old TAR files..."
+          rm -f frontend.tar backend.tar
+
+    #  6. NOW copy NEW TAR files
+    - name: Copy New TAR files
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.VM_HOST }}
+        username: ${{ secrets.VM_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: "frontend.tar,backend.tar"
+        target: "/home/${{ secrets.VM_USER }}/SYMPTOM-CHECKER/"
+
+    # 7. SECOND SSH → install new version
+    - name: Install New Deployment
+      uses: appleboy/ssh-action@v0.1.10
+      with:
+        host: ${{ secrets.VM_HOST }}
+        username: ${{ secrets.VM_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          cd /home/${{ secrets.VM_USER }}/SYMPTOM-CHECKER
+
+          echo "Installing new version..."
+          chmod +x install.sh
+          ./install.sh
+
+          echo "Deployment completed ✅"
