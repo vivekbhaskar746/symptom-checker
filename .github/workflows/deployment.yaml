@@ -56,7 +56,7 @@ jobs:
           ./uninstall.sh || true
 
           echo "Deleting old TAR files..."
-          rm -f frontend.tar backend.tar
+          rm -f symptom-checker-frontend.tar symptom-checker-backend.tar
 
     #  6. NOW copy NEW TAR files
     - name: Copy New TAR files
@@ -65,7 +65,7 @@ jobs:
         host: ${{ secrets.VM_HOST }}
         username: ${{ secrets.VM_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
-        source: "frontend.tar,backend.tar"
+        source: "symptom-checker-frontend.tar,symptom-checker-backend.tar"
         target: "/home/${{ secrets.VM_USER }}/SYMPTOM-CHECKER/"
 
     # 7. SECOND SSH → install new version
